@@ -32,8 +32,12 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 function isAdminHost(req) {
-  const host = (req.headers.host || '').split(':')[0].toLowerCase();
-  return host === 'nexuxadmin.onrender.com' || host.endsWith('.nexuxadmin.onrender.com') || host.includes('nexuxadmin');
+  const fullHost = req.headers.host || '';
+  const host = fullHost.split(':')[0].toLowerCase();
+  // Check for admin domain
+  const isAdmin = host.includes('nexuxadmin') || host === 'localhost:3000';
+  console.log(`[HOST] ${fullHost} => ${host} (isAdmin: ${isAdmin})`);
+  return isAdmin;
 }
 
 app.get('/', (req, res) => {
@@ -44,6 +48,13 @@ app.get('/', (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, '..')));
+
+app.get('/index.html', (req, res) => {
+  if (isAdminHost(req)) {
+    return res.sendFile(path.join(__dirname, '..', 'admin', 'admin.html'));
+  }
+  return res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
 
 app.get('/signup.html', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'signup.html'));
