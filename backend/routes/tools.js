@@ -25,17 +25,22 @@ router.get('/:id', (req, res) => {
 
 router.post('/', (req, res) => {
   const body = req.body || {};
-  if (!body.name) {
-    return res.status(400).json({ error: 'Tool name is required' });
+  if (!body.name || !body.price || !body.desc || !body.cat || !body.icon) {
+    return res.status(400).json({ error: 'Tool name, price, description, category and icon are required' });
   }
 
   const tools = getTools();
   const tool = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
     name: body.name,
-    description: body.description || '',
-    price: body.price || 0,
-    tags: Array.isArray(body.tags) ? body.tags : [],
+    desc: body.desc || '',
+    price: body.price || '',
+    cat: body.cat || 'Other',
+    rating: body.rating || 0,
+    icon: body.icon || 'tool',
+    features: Array.isArray(body.features) ? body.features : [],
+    logo: body.logo || '',
+    price_by_country: body.price_by_country || {},
     createdAt: new Date().toISOString(),
   };
 
