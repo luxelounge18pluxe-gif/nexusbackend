@@ -34,7 +34,11 @@ app.use(express.static(path.join(__dirname, '..')));
 
 // Serve frontend pages from the repository root files
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'index.html'));
+  const host = (req.headers.host || '').split(':')[0].toLowerCase();
+  if (host === 'nexuxadmin.onrender.com' || host.endsWith('.nexuxadmin.onrender.com') || host.includes('nexuxadmin')) {
+    return res.sendFile(path.join(__dirname, '..', 'admin', 'admin.html'));
+  }
+  return res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 app.get('/signup.html', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'signup.html'));
@@ -47,6 +51,9 @@ app.get('/ai tool.html', (req, res) => {
 });
 app.get('/admin.html', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'admin', 'admin.html'));
+});
+app.get('/admin', (req, res) => {
+  res.redirect('/admin.html');
 });
 app.get('/privacy.html', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'privacy.html'));
