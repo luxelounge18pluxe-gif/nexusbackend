@@ -30,16 +30,21 @@ connectDB().then(() => {
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, '..')));
 
-// Serve frontend pages from the repository root files
-app.get('/', (req, res) => {
+function isAdminHost(req) {
   const host = (req.headers.host || '').split(':')[0].toLowerCase();
-  if (host === 'nexuxadmin.onrender.com' || host.endsWith('.nexuxadmin.onrender.com') || host.includes('nexuxadmin')) {
+  return host === 'nexuxadmin.onrender.com' || host.endsWith('.nexuxadmin.onrender.com') || host.includes('nexuxadmin');
+}
+
+app.get('/', (req, res) => {
+  if (isAdminHost(req)) {
     return res.sendFile(path.join(__dirname, '..', 'admin', 'admin.html'));
   }
   return res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
+
+app.use(express.static(path.join(__dirname, '..')));
+
 app.get('/signup.html', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'signup.html'));
 });
@@ -67,6 +72,13 @@ app.get('/signin', (req, res) => {
 
 app.use('/api/tools', toolsRouter);
 app.use('/api/transactions', transactionRouter);
+
+app.get('*', (req, res) => {
+  if (isAdminHost(req)) {
+    return res.sendFile(path.join(__dirname, '..', 'admin', 'admin.html'));
+  }
+  return res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
 
 function createToken(user) {
   return jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
