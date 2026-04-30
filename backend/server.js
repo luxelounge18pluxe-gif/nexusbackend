@@ -34,17 +34,33 @@ app.use(express.json({ limit: '10mb' }));
 function isAdminHost(req) {
   const fullHost = req.headers.host || '';
   const host = fullHost.split(':')[0].toLowerCase();
-  // Check for admin domain
-  const isAdmin = host.includes('nexuxadmin') || host === 'localhost:3000';
-  console.log(`[HOST] ${fullHost} => ${host} (isAdmin: ${isAdmin})`);
+  
+  // Check for admin domain patterns
+  const isAdmin = 
+    host.includes('admin') ||
+    host.includes('nexuxadmin') ||
+    host === 'localhost' ||
+    process.env.ADMIN_MODE === 'true';
+  
+  console.log(`[ROUTE] GET / - HOST: "${fullHost}" (${host}) - ADMIN: ${isAdmin}`);
+  
   return isAdmin;
 }
 
 app.get('/', (req, res) => {
-  if (isAdminHost(req)) {
-    return res.sendFile(path.join(__dirname, '..', 'admin', 'admin.html'));
+  try {
+    if (isAdminHost(req)) {
+      const adminPath = path.join(__dirname, '..', 'admin', 'admin.html');
+      console.log(`[SERVE] Admin path: ${adminPath}`);
+      return res.sendFile(adminPath);
+    }
+    const indexPath = path.join(__dirname, '..', 'index.html');
+    console.log(`[SERVE] Index path: ${indexPath}`);
+    return res.sendFile(indexPath);
+  } catch (err) {
+    console.error(`[ERROR] Route error:`, err.message);
+    res.status(500).send('Internal Server Error');
   }
-  return res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
 app.use(express.static(path.join(__dirname, '..')));
