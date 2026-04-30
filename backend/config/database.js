@@ -1,5 +1,37 @@
+const fs = require('fs');
+const path = require('path');
 const { MongoClient, ObjectId } = require('mongodb');
 require('dotenv').config();
+
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const TOOLS_FILE = path.join(DATA_DIR, 'tools.json');
+const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+function readJson(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, JSON.stringify([], null, 2), 'utf8');
+      return [];
+    }
+    const json = fs.readFileSync(filePath, 'utf8');
+    return json ? JSON.parse(json) : [];
+  } catch (error) {
+    console.error(`Failed to read JSON file ${filePath}:`, error);
+    return [];
+  }
+}
+
+function writeJson(filePath, data) {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (error) {
+    console.error(`Failed to write JSON file ${filePath}:`, error);
+    throw error;
+  }
+}
 
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/aitools';
 const DB_NAME = 'aitools';
@@ -141,6 +173,11 @@ async function createTransaction(transaction) {
 }
 
 module.exports = {
+  readJson,
+  writeJson,
+  TOOLS_FILE,
+  TRANSACTIONS_FILE,
+  USERS_FILE,
   connectDB,
   getDB,
   getUsers,
