@@ -32,6 +32,32 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '..')));
 
+// Serve frontend pages from the repository root files
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
+app.get('/signup.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'signup.html'));
+});
+app.get('/signin.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'signin.html'));
+});
+app.get('/ai tool.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'ai tool.html'));
+});
+app.get('/admin.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'admin', 'admin.html'));
+});
+app.get('/privacy.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'privacy.html'));
+});
+app.get('/signup', (req, res) => {
+  res.redirect('/signup.html');
+});
+app.get('/signin', (req, res) => {
+  res.redirect('/signin.html');
+});
+
 app.use('/api/tools', toolsRouter);
 app.use('/api/transactions', transactionRouter);
 
