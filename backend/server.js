@@ -12,7 +12,9 @@ const {
   sanitizeUser,
   setPasswordResetToken,
   resetPassword,
+  updateUser,
 } = require('./model/user');
+const auth = require('./middleware/auth');
 const toolsRouter = require('./routes/tools');
 const transactionRouter = require('./routes/transaction');
 
@@ -168,6 +170,180 @@ app.post('/api/reset-password', async (req, res) => {
   }
 
   res.json({ ok: true, message: 'Password has been reset' });
+});
+
+// ============ Payment Confirmation Routes ============
+const fs = require('fs');
+
+function readPayments() {
+  try {
+    const data = fs.readFileSync(path.join(__dirname, 'data', 'payments.json'), 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    return [];
+  }
+}
+
+function writePayments(payments) {
+  fs.writeFileSync(path.join(__dirname, 'data', 'payments.json'), JSON.stringify(payments, null, 2));
+}
+
+function generatePaymentId() {
+  return 'pay_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// POST /api/payment-confirm - User submits pending payment
+app.post('/api/payment-confirm', async (req, res) => {
+  try {
+    const { method, wallet_address, amount_usd } = req.body || {};
+    
+    if (!method || !wallet_address || !amount_usd) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Get user from auth token if available
+    let user_email = 'anonymous';
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = await findUserById(decoded.id);
+        user_email = user?.email || 'unknown';
+      } catch (e) {
+        // Auth optional for payments
+      }
+    }
+
+    const payment = {
+      id: generatePaymentId(),
+      _id: generatePaymentId(), // MongoDB-like ID
+      method,
+      wallet_address,
+      amount_usd: parseFloat(amount_usd),
+      user_email,
+      user_id: token ? jwt.decode(token)?.id : null,
+      status: 'pending_admin_confirmation',
+      created_at: new Date().toISOString(),
+      confirmed_at: null,
+      confirmed_by_admin: null
+    };
+
+    const payments = readPayments();
+    payments.push(payment);
+    writePayments(payments);
+
+    res.status(201).json({ ok: true, message: 'Payment submitted for admin confirmation', payment });
+  } catch (error) {
+    console.error('Payment submission error:', error);
+    res.status(500).json({ error: 'Failed to submit payment' });
+  }
+});
+
+// GET /api/payment-confirm - Admin retrieves pending payments
+app.get('/api/payment-confirm', (req, res) => {
+  try {
+    const payments = readPayments();
+    // Return all payments, sorted by created_at descending
+    const sorted = payments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    res.json(sorted);
+  } catch (error) {
+    console.error('Error fetching payments:', error);
+    res.status(500).json({ error: 'Failed to fetch payments' });
+  }
+});
+
+// PATCH /api/payment-confirm/:id - Admin confirms or rejects payment
+app.patch('/api/payment-confirm/:id', (req, res) => {
+  try {
+    const { status } = req.body || {};
+    
+    if (!status || !['confirmed', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const payments = readPayments();
+    const paymentIndex = payments.findIndex(p => p.id === req.params.id || p._id === req.params.id);
+    
+    if (paymentIndex === -1) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    payments[paymentIndex].status = status;
+    payments[paymentIndex].confirmed_at = new Date().toISOString();
+    payments[paymentIndex].confirmed_by_admin = 'admin'; // Could store actual admin ID
+
+    writePayments(payments);
+
+    res.json({ ok: true, message: `Payment ${status}`, payment: payments[paymentIndex] });
+  } catch (error) {
+    console.error('Error updating payment:', error);
+    res.status(500).json({ error: 'Failed to update payment' });
+  }
+});
+
+// ============ User Account Management Routes ============
+
+// POST /api/user/change-password - Change user password
+app.post('/api/user/change-password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Missing current or new password' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    const user = await findUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    if (!bcrypt.compareSync(currentPassword, user.passwordHash || '')) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Update with new password
+    const updatedUser = await updateUser(user.id || user._id, { password: newPassword });
+    
+    res.json({ ok: true, message: 'Password changed successfully', user: sanitizeUser(updatedUser) });
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// POST /api/user/delete-account - Delete user account
+app.post('/api/user/delete-account', auth, async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    
+    if (!password) {
+      return res.status(400).json({ error: 'Password required to delete account' });
+    }
+
+    const user = await findUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify password before deletion
+    if (!bcrypt.compareSync(password, user.passwordHash || '')) {
+      return res.status(401).json({ error: 'Incorrect password' });
+    }
+
+    // Mark user as deleted (soft delete)
+    const db = require('./config/database');
+    await updateUser(user.id || user._id, { isDeleted: true, deletedAt: new Date().toISOString() });
+    
+    res.json({ ok: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('Account deletion error:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
 });
 
 app.listen(PORT, () => {
